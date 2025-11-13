@@ -9,7 +9,7 @@
 | Linting | Ruff | Fast code linting |
 | Installer | uv | Fast Python package installer |
 | Data Utilities | Pandas (basic) | Optional — for CSV import/export |
-| Logging | built-in logging / loguru | For debugging/log tracking |
+| Logging | built-in logging | For debugging/log tracking |
 
 ### 🧩 Optional / Add Later
 

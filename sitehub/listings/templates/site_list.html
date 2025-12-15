@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Site Listings</title>
+</head>
+<body>
+
+<h2>Approved Sites</h2>
+
+<!-- ================= FILTER FORM ================= -->
+<form method="get" style="border:1px solid #ccc; padding:10px; margin-bottom:20px;">
+    <h3>Filter Sites</h3>
+
+    <!-- Location / City -->
+    <input type="text" name="location" placeholder="Location / City">
+
+    <!-- Price Range -->
+    <input type="number" name="min_price" placeholder="Min Price">
+    <input type="number" name="max_price" placeholder="Max Price">
+
+    <!-- Plot Size -->
+    <input type="number" name="plot_size" placeholder="Min Plot Size (sq.ft)">
+
+    <!-- Facing -->
+    <select name="facing">
+        <option value="">Facing</option>
+        <option value="east">East</option>
+        <option value="west">West</option>
+        <option value="north">North</option>
+        <option value="south">South</option>
+    </select>
+
+    <!-- Ownership Type -->
+    <select name="ownership_type">
+        <option value="">Ownership Type</option>
+        <option value="individual">Individual</option>
+        <option value="developer">Developer</option>
+        <option value="broker">Broker</option>
+    </select>
+
+    <!-- Availability -->
+    <select name="availability">
+        <option value="">Availability</option>
+        <option value="available">Available</option>
+        <option value="sold">Sold</option>
+    </select>
+
+    <!-- Nearby Landmark -->
+    <input type="text" name="landmark" placeholder="Nearby Landmark">
+
+    <!-- Optional Filters -->
+    <input type="number" name="road_width" placeholder="Min Road Width (ft)">
+    <input type="number" name="distance" placeholder="Max Distance to Main Road (m)">
+
+    <select name="zoning_type">
+        <option value="">Zoning Type</option>
+        <option value="residential">Residential</option>
+        <option value="commercial">Commercial</option>
+        <option value="agricultural">Agricultural</option>
+    </select>
+
+    <br><br>
+    <button type="submit">Apply Filters</button>
+    <a href="{% url 'site_list' %}">Clear Filters</a>
+</form>
+
+<hr>
+
+<!-- ================= SITE LIST ================= -->
+{% if sites %}
+    {% for site in sites %}
+        <div style="border:1px solid #000; padding:10px; margin:10px; width:350px;">
+            <h3>{{ site.name }}</h3>
+
+            <p><strong>Location:</strong> {{ site.location }}</p>
+            <p><strong>Area:</strong> {{ site.area }} sq.ft</p>
+            <p><strong>Price:</strong> ₹{{ site.price }}</p>
+            <p><strong>Owner:</strong> {{ site.owner }}</p>
+
+            {% if site.plot_size %}
+                <p><strong>Plot Size:</strong> {{ site.plot_size }} sq.ft</p>
+            {% endif %}
+
+            {% if site.facing %}
+                <p><strong>Facing:</strong> {{ site.facing|title }}</p>
+            {% endif %}
+
+            {% if site.ownership_type %}
+                <p><strong>Ownership:</strong> {{ site.ownership_type|title }}</p>
+            {% endif %}
+
+            {% if site.availability %}
+                <p><strong>Availability:</strong> {{ site.availability|title }}</p>
+            {% endif %}
+
+            {% if site.landmark %}
+                <p><strong>Nearby Landmark:</strong> {{ site.landmark }}</p>
+            {% endif %}
+
+            {% if site.road_width %}
+                <p><strong>Road Width:</strong> {{ site.road_width }} ft</p>
+            {% endif %}
+
+            {% if site.distance_to_main_road %}
+                <p><strong>Distance to Main Road:</strong> {{ site.distance_to_main_road }} m</p>
+            {% endif %}
+
+            {% if site.zoning_type %}
+                <p><strong>Zoning:</strong> {{ site.zoning_type|title }}</p>
+            {% endif %}
+
+            <!-- ===== MULTIPLE IMAGES ===== -->
+            {% if site.images %}
+                <div>
+                    {% for img in site.images %}
+                        <img src="{{ img }}" width="250" height="150" style="margin:5px;">
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+{% else %}
+    <p>No approved sites available.</p>
+{% endif %}
+
+<br>
+<a href="{% url 'upload_site' %}">Upload New Site</a>
+
+</body>
+</html>

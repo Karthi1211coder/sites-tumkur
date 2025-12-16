@@ -3,14 +3,43 @@ from django.http import HttpResponse
 from django.core.files.storage import FileSystemStorage
 from bson import ObjectId
 from .forms import SiteForm
-
 from .mongo import site_collection
+from django.http import JsonResponse
+from django.http import Http404
+from .mongo import site_collection, chat_collection
+import re
+from django.views.decorators.csrf import csrf_exempt
+# mongo.py
+from pymongo import MongoClient
+
+client = MongoClient("mongodb://localhost:27017/")
+db = client["site_db"]   # use your actual DB name
+
+
+
+
+
+def generate_site_code():
+    last_site = site_collection.find_one(
+        {"site_code": {"$regex": "^TUMK"}},
+        sort=[("_id", -1)]  # safer than string sort
+    )
+
+    if last_site and "site_code" in last_site:
+        last_number = int(last_site["site_code"][4:])
+        new_number = last_number + 1
+    else:
+        new_number = 1
+
+    return f"TUMK{new_number:03d}"
+
+
 
 
 def upload_site(request, site_id=None):
     site_data = None
 
-    # Fetch existing site for edit
+    # ---------------- FETCH EXISTING SITE (EDIT) ----------------
     if site_id:
         site_data = site_collection.find_one({'_id': ObjectId(site_id)})
 
@@ -20,12 +49,23 @@ def upload_site(request, site_id=None):
         if form.is_valid():
             data = {}
 
-            # Save normal fields
+            # ---------------- SAVE NORMAL FIELDS ----------------
             for key, value in form.cleaned_data.items():
                 if key != 'image' and value not in [None, '', []]:
                     data[key] = value
 
-            # ✅ SINGLE IMAGE HANDLING
+            # ---------------- MAP PIN LOCATION ----------------
+            lat = request.POST.get("latitude")
+            lng = request.POST.get("longitude")
+
+            if lat and lng:
+                try:
+                    data["latitude"] = float(lat)
+                    data["longitude"] = float(lng)
+                except ValueError:
+                    pass  # Ignore invalid coordinates safely
+
+            # ---------------- IMAGE HANDLING ----------------
             image = request.FILES.get('image')
             fs = FileSystemStorage()
 
@@ -33,22 +73,29 @@ def upload_site(request, site_id=None):
                 filename = fs.save(image.name, image)
                 data['image'] = fs.url(filename)
             elif site_data and 'image' in site_data:
-                # keep old image during update
+                # Keep old image during update
                 data['image'] = site_data['image']
 
-            # Reset status for admin approval
+            # ---------------- STATUS RESET ----------------
             data['status'] = 'pending'
 
+            # ---------------- UPDATE EXISTING SITE ----------------
             if site_id:
                 site_collection.update_one(
                     {'_id': ObjectId(site_id)},
                     {'$set': data}
                 )
+
                 return HttpResponse(
                     "<h2>Your site has been updated successfully and sent for admin approval.</h2>"
                 )
+
+            # ---------------- INSERT NEW SITE ----------------
             else:
+                data['site_code'] = generate_site_code()  # ✅ ONLY FOR NEW SITE
+
                 site_collection.insert_one(data)
+
                 return HttpResponse(
                     "<h2>Your site has been uploaded successfully and sent for admin approval.</h2>"
                 )
@@ -64,58 +111,98 @@ def upload_site(request, site_id=None):
 
 
 
+
 def site_list(request):
-    query = {'status': 'approved'}
+    filters = {"status": "approved"}
 
-    # 🔍 Location / City / Area
-    location = request.GET.get('location')
+    # -------- TEXT FILTERS --------
+    location = request.GET.get("location")
+    landmark = request.GET.get("landmark")
+
     if location:
-        query['location'] = {'$regex': location, '$options': 'i'}
+        filters["location"] = {"$regex": location.strip(), "$options": "i"}
 
-    # 💰 Price Range
-    min_price = request.GET.get('min_price')
-    max_price = request.GET.get('max_price')
+    if landmark:
+        filters["landmark"] = {"$regex": landmark.strip(), "$options": "i"}
+
+    # -------- PRICE FILTER --------
+    min_price = request.GET.get("min_price")
+    max_price = request.GET.get("max_price")
 
     if min_price or max_price:
-        query['price'] = {}
+        filters["price"] = {}
         if min_price:
-            query['price']['$gte'] = float(min_price)
+            filters["price"]["$gte"] = int(min_price)
         if max_price:
-            query['price']['$lte'] = float(max_price)
+            filters["price"]["$lte"] = int(max_price)
 
-    # 📐 Plot Size
-    plot_size = request.GET.get('plot_size')
-    if plot_size:
-        query['plot_size'] = {'$gte': int(plot_size)}
+    # -------- AREA FILTER --------
+    min_area = request.GET.get("min_area")
+    max_area = request.GET.get("max_area")
 
-    # 🧭 Facing
-    facing = request.GET.get('facing')
+    if min_area or max_area:
+        filters["area"] = {}
+        if min_area:
+            filters["area"]["$gte"] = int(min_area)
+        if max_area:
+            filters["area"]["$lte"] = int(max_area)
+
+    # -------- DROPDOWN FILTERS --------
+    facing = request.GET.get("facing")
+    ownership_type = request.GET.get("ownership_type")
+    availability = request.GET.get("availability")
+    zoning_type = request.GET.get("zoning_type")
+
     if facing:
-        query['facing'] = facing
+        filters["facing"] = facing
 
-    # 👤 Ownership Type
-    ownership_type = request.GET.get('ownership_type')
     if ownership_type:
-        query['ownership_type'] = ownership_type
+        filters["ownership_type"] = ownership_type
 
-    # ✅ Availability
-    availability = request.GET.get('availability')
     if availability:
-        query['availability'] = availability
+        filters["availability"] = availability
 
-    # 🏫 Landmark
-    landmark = request.GET.get('landmark')
-    if landmark:
-        query['landmark'] = {'$regex': landmark, '$options': 'i'}
+    if zoning_type:
+        filters["zoning_type"] = zoning_type
 
-    sites_cursor = site_collection.find(query)
-    sites = []
+    # -------- EXTRA NUMERIC FILTERS --------
+    road_width = request.GET.get("road_width")
+    distance = request.GET.get("distance_to_main_road")
 
-    for site in sites_cursor:
-        site['id_str'] = str(site['_id'])
-        sites.append(site)
+    if road_width:
+        filters["road_width"] = {"$gte": int(road_width)}
 
-    return render(request, 'site_list.html', {'sites': sites})
+    if distance:
+        filters["distance_to_main_road"] = {"$lte": int(distance)}
+
+    # -------- SORTING --------
+    sort_price = request.GET.get("sort_price")
+
+    if sort_price == "low_high":
+        sites_cursor = site_collection.find(filters).sort("price", 1)
+    elif sort_price == "high_low":
+        sites_cursor = site_collection.find(filters).sort("price", -1)
+    else:
+        sites_cursor = site_collection.find(filters)
+
+    # -------- BUILD LIST --------
+    site_list = []
+    for s in sites_cursor:
+        s["id_str"] = str(s["_id"])
+        site_list.append(s)
+
+    # -------- CONTEXT --------
+    context = {
+        "sites": site_list,
+        "facing_choices": ["east", "west", "north", "south"],
+        "ownership_choices": ["individual", "developer", "broker"],
+        "availability_choices": ["available", "sold"],
+        "zoning_choices": ["residential", "commercial", "agricultural"],
+    }
+
+    return render(request, "site_list.html", context)
+
+
 
 
 
@@ -170,6 +257,120 @@ def rejected_sites(request):
 
     print("TOTAL REJECTED:", len(sites))
     return render(request, 'rejected_sites.html', {'sites': sites})
+
+def view_on_map(request, site_id):
+    site = site_collection.find_one({"_id": ObjectId(site_id)})
+
+    if not site:
+        return HttpResponse("Site not found")
+
+    site["id_str"] = str(site["_id"])
+
+    return render(request, "map_view.html", {"site": site})
+
+def site_detail(request, site_id):
+    site = db.sites.find_one(
+        {"_id": ObjectId(site_id)}
+    )  # ✅ NO PROJECTION
+
+    return render(request, "site_detail.html", {
+        "site": site
+    })
+
+
+
+
+
+
+@csrf_exempt
+def chat(request):
+    user_msg = request.POST.get("message", "").lower()
+
+    location = None
+    min_price = None
+    max_price = None
+
+    # 🔹 Extract location
+    locations = ["tumkur", "bangalore", "mysore"]
+    for loc in locations:
+        if loc in user_msg:
+            location = loc
+
+    # 🔹 Extract price
+    prices = re.findall(r'\d+', user_msg)
+    if prices:
+        min_price = int(prices[0])
+
+    # 🔹 MongoDB query
+    query = {"status": "approved"}
+
+    if location:
+        query["location"] = location
+
+    if min_price:
+        query["price"] = {"$lte": min_price}
+
+    sites = list(db.sites.find(query))
+
+    if not sites:
+        return JsonResponse({
+            "reply": "No sites found matching your criteria."
+        })
+
+    reply = "Here are some sites:\n"
+    for s in sites[:3]:
+        reply += f"{s['name']} - ₹{s['price']} - {s['location']}\n"
+
+    return JsonResponse({"reply": reply})
+
+
+def edit_site(request, site_id):
+    site = db.sites.find_one({"_id": ObjectId(site_id)})
+
+    if not site:
+        return HttpResponse("Site not found")
+
+    if request.method == "POST":
+        updated_data = {
+            "name": request.POST.get("name"),
+            "location": request.POST.get("location").lower(),
+            "area": float(request.POST.get("area")),
+            "price": float(request.POST.get("price")),
+            "owner": request.POST.get("owner"),
+        }
+
+        # 🔁 If site was already approved, send back for re-approval
+        if site.get("status") == "approved":
+            updated_data["status"] = "pending"
+
+        db.sites.update_one(
+            {"_id": ObjectId(site_id)},
+            {"$set": updated_data}
+        )
+
+        return redirect("admin_dashboard")
+
+    return render(
+        request,
+        "edit_site.html",
+        {"site": site}
+    )
+
+
+def approved_sites_admin(request):
+    sites = list(db.sites.find({"status": "approved"}))
+
+    for site in sites:
+        site["id_str"] = str(site["_id"])  # ✅ FIX
+
+    return render(request, "approved_sites_admin.html", {
+        "sites": sites
+    })
+
+
+
+
+
 
 
 

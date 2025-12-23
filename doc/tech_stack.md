@@ -7,7 +7,7 @@ A concise summary of the technologies used for this site (frontend, backend, dat
 | Layer | Technology | Purpose |
 |-------|-------------|----------|
 | Frontend | **Next.js 15** | Fast, SEO-friendly web interface |
-| Backend | **Flask (Python)** | REST API for data and logic |
+| Backend | **Django (Python)** | REST API for data and logic |
 | Database | **MongoDB** | Store site details, users, appointments |
 | Version Control | **GitHub** | Source code management |
 | Editor | **VS Code** | Development environment |

@@ -11,27 +11,12 @@ import re
 from django.views.decorators.csrf import csrf_exempt
 # mongo.py
 from pymongo import MongoClient
+from listings.utils import generate_site_code
+
 
 client = MongoClient("mongodb://localhost:27017/")
 db = client["site_db"]   # use your actual DB name
 
-
-
-
-
-def generate_site_code():
-    last_site = site_collection.find_one(
-        {"site_code": {"$regex": "^TUMK"}},
-        sort=[("_id", -1)]  # safer than string sort
-    )
-
-    if last_site and "site_code" in last_site:
-        last_number = int(last_site["site_code"][4:])
-        new_number = last_number + 1
-    else:
-        new_number = 1
-
-    return f"TUMK{new_number:03d}"
 
 
 

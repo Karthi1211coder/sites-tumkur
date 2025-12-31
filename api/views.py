@@ -53,7 +53,12 @@ def approved_sites_api(request):
         s["site_code"] = s.get("site_code", "")
         s["area"] = s.get("area", 0)
         s["owner"] = s.get("owner", "")
-        s["image"] = s.get("image", "")
+
+        # ✅ FIX: normalize image
+        if s.get("image"):
+            s["image"] = normalize_image(request, s["image"])
+        else:
+            s["image"] = ""
 
     serializer = SiteSerializer(sites, many=True)
 

@@ -18,45 +18,59 @@ export default function SiteCard({
   image,
 }: SiteCardProps) {
 
+  // -----------------------------
   // ❤️ Add to Wishlist
+  // -----------------------------
   const addToWishlist = () => {
-    const existing = JSON.parse(
+    const wishlist = JSON.parse(
       localStorage.getItem("wishlist") || "[]"
     );
 
-    if (existing.find((item: any) => item.code === code)) {
+    if (wishlist.some((item: any) => item.code === code)) {
       alert("Already in wishlist");
       return;
     }
 
+    wishlist.push({
+      name,
+      location,
+      price,
+      code,
+      image,
+    });
+
     localStorage.setItem(
       "wishlist",
-      JSON.stringify([
-        ...existing,
-        { name, location, price, code, image }
-      ])
+      JSON.stringify(wishlist)
     );
 
     alert("Added to wishlist ❤️");
   };
 
+  // -----------------------------
   // 🛒 Add to Cart
+  // -----------------------------
   const addToCart = () => {
-    const existing = JSON.parse(
+    const cart = JSON.parse(
       localStorage.getItem("cart") || "[]"
     );
 
-    if (existing.find((item: any) => item.code === code)) {
+    if (cart.some((item: any) => item.code === code)) {
       alert("Already in cart");
       return;
     }
 
+    cart.push({
+      name,
+      location,
+      price,
+      code,
+      image,
+    });
+
     localStorage.setItem(
       "cart",
-      JSON.stringify([
-        ...existing,
-        { name, location, price, code, image }
-      ])
+      JSON.stringify(cart)
     );
 
     alert("Added to cart 🛒");
@@ -66,22 +80,24 @@ export default function SiteCard({
     <div className="bg-white rounded-xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden relative">
 
       {/* 🔴 PRICE BADGE */}
-      <div className="absolute top-3 right-3 bg-red-600 text-white text-sm px-3 py-1 rounded">
+      <div className="absolute top-3 right-3 bg-red-600 text-white text-sm px-3 py-1 rounded z-10">
         ₹{price}
       </div>
 
-      {/* 🖼 IMAGE (NO URL MODIFICATION) */}
-      <img
-        src={image || "/no-image.png"}
-        alt={name}
-        className="h-44 w-full object-cover"
-      />
+      {/* 🖼 IMAGE */}
+      <Link href={`/site/${code}`}>
+        <img
+          src={image || "/no-image.png"}
+          alt={name}
+          className="h-44 w-full object-cover cursor-pointer"
+        />
+      </Link>
 
       {/* CONTENT */}
       <div className="p-4">
         <div className="flex justify-between items-start">
           <Link href={`/site/${code}`}>
-            <h3 className="text-lg font-semibold text-gray-800 hover:text-red-600">
+            <h3 className="text-lg font-semibold text-gray-800 hover:text-red-600 cursor-pointer">
               {name}
             </h3>
           </Link>
